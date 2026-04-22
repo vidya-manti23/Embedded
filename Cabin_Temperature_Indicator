@@ -1,0 +1,54 @@
+#include "stm32f4xx.h"
+
+void delay_ms(uint32_t ms);
+
+int main(void) {
+    // 1. Enable clock for GPIOA
+    RCC->AHB1ENR |= (1 << 0);   // GPIOA
+
+    // 2. Configure PA6, PA7, PA8 as outputs (Blue, Green, Red LEDs)
+    for (int pin = 6; pin <= 8; pin++) {
+        GPIOA->MODER &= ~(0x3 << (pin * 2));   // Clear mode
+        GPIOA->MODER |=  (0x1 << (pin * 2));   // Output
+        GPIOA->OTYPER &= ~(1 << pin);          // Push-pull
+        GPIOA->OSPEEDR |= (0x1 << (pin * 2));  // Medium speed
+        GPIOA->PUPDR &= ~(0x3 << (pin * 2));   // No pull
+    }
+
+    // 3. Configure PA5 as input (button)
+    GPIOA->MODER &= ~(0x3 << (5 * 2));         // Input
+    GPIOA->PUPDR &= ~(0x3 << (5 * 2));
+    GPIOA->PUPDR |=  (0x1 << (5 * 2));         // Pull-up (button to GND)
+
+    int zone = 0;  // 0 = Cold, 1 = Normal, 2 = Hot
+
+    while (1) {
+        // Button press (active LOW)
+        if (!(GPIOA->IDR & (1 << 5))) {
+            delay_ms(200); // debounce
+
+            zone = (zone + 1) % 3;
+
+            // Turn OFF all LEDs
+            GPIOA->ODR &= ~((1 << 6) | (1 << 7) | (1 << 8));
+
+            // Turn ON based on zone
+            if (zone == 0) {
+                GPIOA->ODR |= (1 << 6);  // 🔵 Cold
+            } else if (zone == 1) {
+                GPIOA->ODR |= (1 << 7);  // 🟢 Normal
+            } else {
+                GPIOA->ODR |= (1 << 8);  // 🔴 Hot
+            }
+
+            // Wait until button is released (VERY IMPORTANT)
+            while (!(GPIOA->IDR & (1 << 5)));
+        }
+    }
+}
+
+void delay_ms(uint32_t ms) {
+    for (volatile uint32_t i = 0; i < ms * 1000; i++) {
+        __asm("nop");
+    }
+}
